@@ -8,7 +8,13 @@ contract QuotationFactory is Ownable {
     mapping(address => address[]) public sellerQuotations;
     mapping(address => address[]) public buyerQuotations;
 
-    event QuotationCreated(address indexed seller, address indexed quotationAddress, address indexed buyer, uint256 total);
+    event QuotationCreated(
+        address indexed seller,
+        address indexed quotationAddress,
+        address indexed buyer,
+        uint256 total,
+        uint256 sellerStake
+    );
 
     constructor() Ownable(msg.sender) {}
 
@@ -19,26 +25,32 @@ contract QuotationFactory is Ownable {
         uint256[] calldata milestoneDeadlines,
         uint256 clientWindowSeconds,
         uint8 maxRevisions
-    ) external returns (address) {
+    ) external payable returns (address) {
         require(milestonePercentsBP.length == milestoneDeadlines.length, "length mismatch");
 
-        Quotation q = new Quotation(
+        uint256 sellerStakeAmount = msg.value; // REAL stake ETH
+
+        // forward ETH stake to quotation contract
+        Quotation q = new Quotation{value: msg.value}(
             msg.sender,
             buyer,
             totalAmount,
             milestonePercentsBP,
             milestoneDeadlines,
             clientWindowSeconds,
-            maxRevisions
+            maxRevisions,
+            sellerStakeAmount
         );
 
         address qaddr = address(q);
+
         sellerQuotations[msg.sender].push(qaddr);
         if (buyer != address(0)) {
             buyerQuotations[buyer].push(qaddr);
         }
 
-        emit QuotationCreated(msg.sender, qaddr, buyer, totalAmount);
+        emit QuotationCreated(msg.sender, qaddr, buyer, totalAmount, sellerStakeAmount);
+
         return qaddr;
     }
 

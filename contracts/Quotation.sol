@@ -33,6 +33,9 @@ contract Quotation is Ownable, ReentrancyGuard {
 
     uint8 public maxRevisions;
 
+    uint256 public sellerStakeAmount;
+    bool public stakeReleased;
+
     event QuotationCreated(address indexed seller, address indexed buyer, uint256 total);
     event Paid(address indexed payer, uint256 amount);
     event DeliverableSubmitted(uint256 indexed idx, string note);
@@ -53,8 +56,9 @@ contract Quotation is Ownable, ReentrancyGuard {
         uint256[] memory _milestonePercentsBP,
         uint256[] memory _milestoneDeadlines, 
         uint256 _clientWindowSeconds,
-        uint8 _maxRevisions
-    ) Ownable(_seller) {
+        uint8 _maxRevisions,
+        uint256 _sellerStakeAmount
+    ) Ownable(_seller) payable {
         require(_seller != address(0), "seller zero");
         require(_totalAmount > 0, "total zero");
         require(_milestonePercentsBP.length == _milestoneDeadlines.length, "len mismatch");
@@ -71,6 +75,7 @@ contract Quotation is Ownable, ReentrancyGuard {
         clientResponseWindow = _clientWindowSeconds == 0 ? 7 days : _clientWindowSeconds;
         currentMilestone = 0;
         maxRevisions = _maxRevisions;
+        sellerStakeAmount = _sellerStakeAmount;
 
         for (uint i = 0; i < _milestonePercentsBP.length; i++) {
             uint256 amt = (_totalAmount * _milestonePercentsBP[i]) / 10000;
@@ -136,6 +141,15 @@ contract Quotation is Ownable, ReentrancyGuard {
         emit DeliverableSubmitted(idx, note);
     }
 
+    function _releaseSellerStake() internal {
+        if (stakeReleased) return;
+        stakeReleased = true;
+        if (sellerStakeAmount > 0) {
+            (bool ok, ) = payable(seller).call{value: sellerStakeAmount}("");
+            require(ok, "stake return failed");
+        }
+    }
+
     function approveMilestone(uint256 idx) external onlyBuyer nonReentrant {
         Milestone storage m = milestones[idx];
         require(m.status == MilestoneStatus.Submitted, "not submitted");
@@ -148,6 +162,12 @@ contract Quotation is Ownable, ReentrancyGuard {
         currentMilestone++;
         if (currentMilestone >= milestones.length) {
             status = OrderStatus.Completed;
+            emit OrderCompleted();
+        }
+
+        if (currentMilestone >= milestones.length) {
+            status = OrderStatus.Completed;
+            _releaseSellerStake();  // <--- ADD THIS
             emit OrderCompleted();
         }
 
@@ -192,9 +212,21 @@ contract Quotation is Ownable, ReentrancyGuard {
         Milestone storage m = milestones[currentMilestone];
         require(block.timestamp >= m.deadlineAt, "deadline not passed");
         uint256 refundAmount = _remainingAmount();
+        uint256 stake = sellerStakeAmount;
+
         status = OrderStatus.Refunded;
+        stakeReleased = true;
+
+        // transfer milestone refund
         _payout(buyer, refundAmount);
-        emit MilestoneRefunded(currentMilestone, refundAmount);
+
+        // transfer stake
+        if (stake > 0) {
+            (bool ok2, ) = payable(buyer).call{value: stake}("");
+            require(ok2, "stake payout failed");
+        }
+
+        emit MilestoneRefunded(currentMilestone, refundAmount + stake);
     }
 
     function proposeCancel(uint256 idx) external onlyParty {
@@ -212,9 +244,18 @@ contract Quotation is Ownable, ReentrancyGuard {
 
         if (m.buyerCancelConfirm && m.sellerCancelConfirm) {
             uint256 refundAmount = _remainingAmount();
+            uint256 stake = sellerStakeAmount;
+
             status = OrderStatus.Refunded;
+            stakeReleased = true;
+
             _payout(buyer, refundAmount);
-            emit CancelConfirmed(idx, refundAmount);
+            if (stake > 0) {
+                (bool ok3, ) = payable(buyer).call{value: stake}("");
+                require(ok3, "stake payout failed");
+            }
+
+            emit CancelConfirmed(idx, refundAmount + stake);
             emit OrderCancelled();
         }
     }
