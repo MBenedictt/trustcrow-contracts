@@ -9,20 +9,24 @@ contract Quotation is Ownable, ReentrancyGuard {
     enum MilestoneStatus { Pending, Submitted, Approved, Released, Refunded }
 
     struct Milestone {
-        uint256 percentBP;  
-        uint256 amount;      
+        string title;
+        string description;
+        uint256 percentBP;
+        uint256 amount;
         MilestoneStatus status;
         uint256 submittedAt;
         uint8 revisions;
-        uint256 deadlineAt;  
-        string note;         
+        uint256 deadlineAt;
+        string note;
         bool buyerCancelConfirm;
-        bool sellerCancelConfirm;
+        bool sellerCancelConfirm; 
     }
 
     // order
     address public seller;
     address public buyer;
+    string public projectTitle;
+    string public projectDescription;
     uint256 public totalAmount;
     uint256 public paidAt;
     uint256 public createdAt;
@@ -57,11 +61,17 @@ contract Quotation is Ownable, ReentrancyGuard {
         uint256[] memory _milestoneDeadlines, 
         uint256 _clientWindowSeconds,
         uint8 _maxRevisions,
-        uint256 _sellerStakeAmount
+        uint256 _sellerStakeAmount,
+        string memory _projectTitle,
+        string memory _projectDescription,
+        string[] memory _milestoneTitles,
+        string[] memory _milestoneDescriptions
     ) Ownable(_seller) payable {
         require(_seller != address(0), "seller zero");
         require(_totalAmount > 0, "total zero");
         require(_milestonePercentsBP.length == _milestoneDeadlines.length, "len mismatch");
+        require(_milestoneTitles.length == _milestonePercentsBP.length, "title mismatch");
+        require(_milestoneDescriptions.length == _milestonePercentsBP.length, "desc mismatch");
 
         uint256 sum;
         for (uint i = 0; i < _milestonePercentsBP.length; i++) sum += _milestonePercentsBP[i];
@@ -69,6 +79,8 @@ contract Quotation is Ownable, ReentrancyGuard {
 
         seller = _seller;
         buyer = _buyer;
+        projectTitle = _projectTitle;
+        projectDescription = _projectDescription;
         totalAmount = _totalAmount;
         createdAt = block.timestamp;
         status = OrderStatus.Created;
@@ -80,12 +92,14 @@ contract Quotation is Ownable, ReentrancyGuard {
         for (uint i = 0; i < _milestonePercentsBP.length; i++) {
             uint256 amt = (_totalAmount * _milestonePercentsBP[i]) / 10000;
             milestones.push(Milestone({
+                title: _milestoneTitles[i],
+                description: _milestoneDescriptions[i],
                 percentBP: _milestonePercentsBP[i],
                 amount: amt,
                 status: MilestoneStatus.Pending,
                 submittedAt: 0,
                 revisions: 0,
-                deadlineAt: _milestoneDeadlines[i], // offset for now
+                deadlineAt: _milestoneDeadlines[i],
                 note: "",
                 buyerCancelConfirm: false,
                 sellerCancelConfirm: false
@@ -299,10 +313,24 @@ contract Quotation is Ownable, ReentrancyGuard {
         uint256 deadlineAt,
         string memory note,
         bool buyerCancelConfirm,
-        bool sellerCancelConfirm
+        bool sellerCancelConfirm,
+        string memory title,
+        string memory description
     ) {
         Milestone storage m = milestones[idx];
-        return (m.percentBP, m.amount, m.status, m.submittedAt, m.revisions, m.deadlineAt, m.note, m.buyerCancelConfirm, m.sellerCancelConfirm);
+        return (
+            m.percentBP,
+            m.amount,
+            m.status,
+            m.submittedAt,
+            m.revisions,
+            m.deadlineAt,
+            m.note,
+            m.buyerCancelConfirm,
+            m.sellerCancelConfirm,
+            m.title,
+            m.description
+        );
     }
 
     function getOrder() external view returns (

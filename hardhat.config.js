@@ -10,13 +10,14 @@ export default {
     settings: {
       optimizer: {
         enabled: true,
-        runs: 50,
+        runs: 200,
       },
+      viaIR: true,   // <-- FIX
     },
   },
   networks: {
     sepolia: {
-      url: SEPOLIA_RPC_URL || "https://sepolia.infura.io/v3/YOUR_INFURA_PROJECT_ID",
+      url: SEPOLIA_RPC_URL || "",
       accounts: PRIVATE_KEY ? [PRIVATE_KEY] : [],
     },
   },

@@ -24,13 +24,18 @@ contract QuotationFactory is Ownable {
         uint256[] calldata milestonePercentsBP,
         uint256[] calldata milestoneDeadlines,
         uint256 clientWindowSeconds,
-        uint8 maxRevisions
+        uint8 maxRevisions,
+        string calldata projectTitle,
+        string calldata projectDescription,
+        string[] calldata milestoneTitles,
+        string[] calldata milestoneDescriptions
     ) external payable returns (address) {
         require(milestonePercentsBP.length == milestoneDeadlines.length, "length mismatch");
+        require(milestoneTitles.length == milestonePercentsBP.length, "title length mismatch");
+        require(milestoneDescriptions.length == milestonePercentsBP.length, "desc length mismatch");
 
-        uint256 sellerStakeAmount = msg.value; // REAL stake ETH
+        uint256 sellerStakeAmount = msg.value;
 
-        // forward ETH stake to quotation contract
         Quotation q = new Quotation{value: msg.value}(
             msg.sender,
             buyer,
@@ -39,7 +44,11 @@ contract QuotationFactory is Ownable {
             milestoneDeadlines,
             clientWindowSeconds,
             maxRevisions,
-            sellerStakeAmount
+            sellerStakeAmount,
+            projectTitle,
+            projectDescription,
+            milestoneTitles,
+            milestoneDescriptions
         );
 
         address qaddr = address(q);
@@ -53,6 +62,7 @@ contract QuotationFactory is Ownable {
 
         return qaddr;
     }
+
 
     function getUserQuotations(address user) external view returns (address[] memory) {
         return sellerQuotations[user];
