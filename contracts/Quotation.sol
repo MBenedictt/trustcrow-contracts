@@ -135,8 +135,24 @@ contract Quotation is Ownable, ReentrancyGuard {
     function _setDeadlinesFromPaidAt() internal {
         uint256 base = paidAt;
         for (uint i = 0; i < milestones.length; i++) {
-            uint256 offset = milestones[i].deadlineAt;
-            milestones[i].deadlineAt = base + offset;
+            uint256 stored = milestones[i].deadlineAt;
+
+            // Jika stored tampak seperti absolute timestamp (>= base)
+            // maka anggap sudah absolute dan biarkan.
+            // Jika stored kecil (misalnya offset in seconds), maka treat as offset.
+            //
+            // reason: offsets (hari/detik) akan jauh lebih kecil daripada current timestamp (~1_700_000_000)
+            if (stored > base) {
+                // already an absolute timestamp, keep it
+                // optionally ensure it's not before paidAt
+                if (stored < base) {
+                    // edge-case: stored absolute is earlier than paidAt -> clamp to base
+                    milestones[i].deadlineAt = base;
+                }
+            } else {
+                // treat stored as offset in seconds
+                milestones[i].deadlineAt = base + stored;
+            }
         }
     }
 
